@@ -45,7 +45,7 @@ import ru.edinros.agitatoroffline.destinations.*
 import ru.edinros.agitatoroffline.ui.theme.ODDComposeTheme
 import timber.log.Timber
 import javax.inject.Inject
-
+//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
 sealed class LauncherState {
     object Auth : LauncherState()
     object OpenSession : LauncherState()
