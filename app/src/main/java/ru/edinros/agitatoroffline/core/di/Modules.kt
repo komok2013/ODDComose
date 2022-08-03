@@ -24,6 +24,7 @@ object DataStoreModule {
     @Provides
     fun providePreferencesDataStore(@ApplicationContext appContext: Context) = PreferencesDataStore(appContext)
 }
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {

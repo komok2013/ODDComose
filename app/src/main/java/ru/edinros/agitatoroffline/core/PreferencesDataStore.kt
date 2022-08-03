@@ -2,10 +2,7 @@ package ru.edinros.agitatoroffline.core
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -14,12 +11,13 @@ import kotlinx.coroutines.flow.map
 import java.io.IOException
 import javax.inject.Inject
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("AuthPref")
-
 class PreferencesDataStore (private val context: Context) {
+    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("AppPref")
+
     private object PreferencesKeys {
         val IS_AUTHORIZED: Preferences.Key<Boolean> = booleanPreferencesKey("isAuthorized")
         val IS_SESSION_OPEN: Preferences.Key<Boolean> = booleanPreferencesKey("isSessionOpen")
+        val TOKEN: Preferences.Key<String> = stringPreferencesKey("token")
     }
     suspend fun updateAuthorized(isAuthorized: Boolean) = PreferencesKeys.IS_AUTHORIZED.setValue(isAuthorized)
     suspend fun isAuthorized(): Boolean = PreferencesKeys.IS_AUTHORIZED.getValue(false)
@@ -29,6 +27,8 @@ class PreferencesDataStore (private val context: Context) {
     suspend fun isSessionOpen(): Boolean = PreferencesKeys.IS_SESSION_OPEN.getValue(false)
     fun watchSession() = PreferencesKeys.IS_SESSION_OPEN.watchValue(false)
 
+    suspend fun updateToken(token: String) = PreferencesKeys.TOKEN.setValue(token)
+    suspend fun getToken(): String = PreferencesKeys.TOKEN.getValue("")
 
 
     /**

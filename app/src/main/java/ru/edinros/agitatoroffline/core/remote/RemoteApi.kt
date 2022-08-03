@@ -6,5 +6,9 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface RemoteApi {
+    @POST("/pub-api/v1.1/phone")
+    suspend fun checkPhone(@Body phoneRequest: PhoneRequest): PhoneResponse
 
+    @POST("/pub-api/v1/auth")
+    suspend fun doAuth(@Body authRequest: AuthRequest): AuthResponse
 }
