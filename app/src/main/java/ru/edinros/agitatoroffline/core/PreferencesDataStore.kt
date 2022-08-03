@@ -12,22 +12,25 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import java.io.IOException
+import javax.inject.Inject
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("AuthPref")
 
-class PrefDataKeyValueStore(private val context: Context) {
-
+class PreferencesDataStore (private val context: Context) {
     private object PreferencesKeys {
         val IS_AUTHORIZED: Preferences.Key<Boolean> = booleanPreferencesKey("isAuthorized")
         val IS_SESSION_OPEN: Preferences.Key<Boolean> = booleanPreferencesKey("isSessionOpen")
     }
-    suspend fun updateAuthorized(isActive: Boolean) = PreferencesKeys.IS_AUTHORIZED.setValue(isActive)
+    suspend fun updateAuthorized(isAuthorized: Boolean) = PreferencesKeys.IS_AUTHORIZED.setValue(isAuthorized)
     suspend fun isAuthorized(): Boolean = PreferencesKeys.IS_AUTHORIZED.getValue(false)
     fun watchAuthorized() = PreferencesKeys.IS_AUTHORIZED.watchValue(false)
 
     suspend fun updateSession(isOpen: Boolean) = PreferencesKeys.IS_SESSION_OPEN.setValue(isOpen)
     suspend fun isSessionOpen(): Boolean = PreferencesKeys.IS_SESSION_OPEN.getValue(false)
     fun watchSession() = PreferencesKeys.IS_SESSION_OPEN.watchValue(false)
+
+
+
     /**
      *  Helper functions
      */

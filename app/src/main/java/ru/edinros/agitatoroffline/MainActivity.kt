@@ -7,7 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
@@ -17,43 +16,32 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.android.style.PlaceholderSpan
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.google.android.gms.auth.api.phone.SmsRetriever
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.annotation.Destination
-import com.ramcosta.composedestinations.annotation.NavGraph
 import com.ramcosta.composedestinations.annotation.RootNavGraph
-import com.ramcosta.composedestinations.manualcomposablecalls.composable
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import com.ramcosta.composedestinations.navigation.clearBackStack
-import com.ramcosta.composedestinations.navigation.navigate
-import com.ramcosta.composedestinations.navigation.popUpTo
 import com.ramcosta.composedestinations.rememberNavHostEngine
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import ru.edinros.agitatoroffline.core.PrefDataKeyValueStore
-import ru.edinros.agitatoroffline.destinations.*
+import ru.edinros.agitatoroffline.core.PreferencesDataStore
+import ru.edinros.agitatoroffline.core.repositories.AuthRepository
+import ru.edinros.agitatoroffline.core.repositories.SessionRepository
+import ru.edinros.agitatoroffline.destinations.AuthPageDestination
+import ru.edinros.agitatoroffline.destinations.OptionsPageDestination
+import ru.edinros.agitatoroffline.destinations.SessionPageDestination
 import ru.edinros.agitatoroffline.ui.theme.ODDComposeTheme
 import timber.log.Timber
 import javax.inject.Inject
-//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
-sealed class LauncherState {
-    object Auth : LauncherState()
-    object OpenSession : LauncherState()
-    object Home : LauncherState()
-}
 
 @HiltViewModel
-class TestVM @Inject constructor(private val dataSore: PrefDataKeyValueStore) : ViewModel() {
+class TestVM @Inject constructor(private val dataSore: PreferencesDataStore) : ViewModel() {
     init {
         Timber.d("Model--> ")
     }
@@ -65,40 +53,31 @@ class TestVM @Inject constructor(private val dataSore: PrefDataKeyValueStore) : 
 }
 
 @HiltViewModel
-class MainVM @Inject constructor(private val dataSore: PrefDataKeyValueStore) : ViewModel() {
+class AuthVM @Inject constructor(private val repository: AuthRepository) : ViewModel() {
     fun signIn() = viewModelScope.launch {
-        dataSore.updateAuthorized(true)
+        repository.updateAuthorized(true)
     }
+    val state = repository.watchAuthorized()
+}
 
-    fun signOut() = viewModelScope.launch {
-        dataSore.updateAuthorized(false)
-    }
-
+@HiltViewModel
+class SessionVM @Inject constructor(
+    private val sessionRepository: SessionRepository,
+    private val authRepository: AuthRepository
+    ) : ViewModel() {
     fun openSession() = viewModelScope.launch {
-        dataSore.updateSession(true)
+        sessionRepository.updateSession(true)
     }
 
     fun closeSession() = viewModelScope.launch {
-        dataSore.updateSession(false)
+        sessionRepository.updateSession(false)
     }
 
-    fun finish() {
-        _finish.value = true
-        Timber.d("${finish.value}")
+    fun signOut() = viewModelScope.launch {
+        authRepository.updateAuthorized(false)
     }
 
-    private val _finish = MutableStateFlow(false)
-    val finish = _finish.asStateFlow()
-    val state = combine(
-        dataSore.watchAuthorized(),
-        dataSore.watchSession()
-    ) { isAuthorized, isSessionOpen ->
-        when {
-            !isAuthorized -> LauncherState.Auth
-            !isSessionOpen -> LauncherState.OpenSession
-            else -> LauncherState.Home
-        }
-    }
+    val state = sessionRepository.watchSession()
 }
 
 @AndroidEntryPoint
@@ -111,7 +90,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LauncherPage(onFinish = {finish()})
+                    LauncherPage(onFinish = { finish() })
                 }
             }
         }
@@ -119,83 +98,45 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun LauncherPage(onFinish: () -> Unit,model: MainVM = hiltViewModel()) {
+fun LauncherPage(onFinish: () -> Unit, model: AuthVM = hiltViewModel()) {
     val engine = rememberNavHostEngine()
     val navController = engine.rememberNavController()
-    val state = model.state.collectAsState(null)
-    DestinationsNavHost(navGraph = NavGraphs.root, engine = engine, navController = navController)
-
+    val state = model.state.collectAsState(true)
+    DestinationsNavHost(navGraph = NavGraphs.root, engine = engine, navController = navController, startRoute = if(state.value) SessionPageDestination else AuthPageDestination)
     val currentDestination by navController.appCurrentDestinationAsState()
-    when (state.value) {
-        LauncherState.Auth -> {
-            currentDestination?.apply {
-                if (this != AuthPageDestination)
-                    navController.navigate(AuthPageDestination) {
-                        popUpTo(this@apply) {
-                            inclusive = true
-                        }
-                    }
-            }
-        }
-        LauncherState.OpenSession -> {
-            navController.navigate(OpenSessionPageDestination) {
-                popUpTo(AuthPageDestination) {
-                    inclusive = true
-                }
-            }
-        }
-        LauncherState.Home -> {
-            navController.navigate(HomeScreenDestination) {
-                popUpTo(AuthPageDestination) {
-                    inclusive = true
-                }
-            }
-
-        }
-        else -> navController.navigateUp()
-    }
-
-}
-
-//@Destination
-//@Composable
-//fun LauncherScreen(model: MainVM = hiltViewModel(), navigator: DestinationsNavigator) {
-//    val state = model.state.collectAsState(null)
-//
 //    when (state.value) {
-//        LauncherState.Auth -> {
-//            AuthPage(navigator = navigator)
+//        false -> {
+//            currentDestination?.apply {
+//                if (this != AuthPageDestination)
+//                    navController.navigate(AuthPageDestination) {
+//                        popUpTo(this@apply) {
+//                            inclusive = true
+//                        }
+//                    }
+//            }
 //        }
-//        LauncherState.OpenSession -> {
-//            navigator.navigate(OpenSessionPageDestination){
-//                popUpTo(AuthPageDestination){
-//                    inclusive=true
+//        true -> {
+//            navController.navigate(SessionPageDestination) {
+//                popUpTo(AuthPageDestination) {
+//                    inclusive = true
 //                }
 //            }
-//            OpenSessionPage(navigator = navigator)
 //        }
-//        LauncherState.Home -> {
-//            navigator.navigate(HomeScreenDestination){
-//                popUpTo(OpenSessionPageDestination){
-//                    inclusive=true
-//                }
-//            }
-//            HomeScreen(navigator = navigator)
-//        }
-//        else -> {}
+//        else->{}
+//
 //    }
-//}
+}
 
 @RootNavGraph(start = true)
 @Destination
 @Composable
 fun AuthPage(
-    model: MainVM = hiltViewModel(),
+    model: AuthVM = hiltViewModel(),
     navigator: DestinationsNavigator,
     testVM: TestVM = hiltViewModel()
 ) {
     Timber.d("NAVIGATOR AUTH is %s", navigator)
-    BackHandler(true) {  }
+    BackHandler(true) { }
     Column {
         Text(text = "AuthPage")
         Button(onClick = { model.signIn() }) {
@@ -207,42 +148,89 @@ fun AuthPage(
 
 @Destination
 @Composable
-fun OpenSessionPage(model: MainVM = hiltViewModel(), navigator: DestinationsNavigator) {
-    Timber.d("NAVIGATOR SESSION is %s", navigator)
-    SmsRetrieverUserConsentBroadcast(onCodeReceived = { s ->
-        Timber.d("Code = %s", s)
-    })
-    Column {
-        Text(text = "OpenSessionPage")
-        Button(onClick = { model.openSession() }) {
-            Text("Open")
-        }
-        Button(onClick = { model.signOut() }) {
-            Text("Sign Out")
-        }
-    }
-}
-
-@Destination
-@Composable
-fun HomeScreen(
-    model: MainVM = hiltViewModel(),
-    navigator: DestinationsNavigator
+fun SessionPage(
+    model: SessionVM = hiltViewModel(),
+    navigator: DestinationsNavigator,
 ) {
-    Timber.d("NAVIGATOR HOME is %s", navigator)
-    Column {
-        Text(text = "Home")
-        Button(onClick = { model.closeSession() }) {
-            Text("Close")
+    val state = model.state.collectAsState(null)
+
+    when (state.value) {
+        false -> {
+            Column {
+                Text(text = "Сессия закрыта")
+                Button(onClick = { model.openSession() }) {
+                    Text("Open")
+                }
+                Button(onClick = {
+                    model.signOut()
+
+                }) {
+                    Text("Sign Out")
+                }
+            }
         }
-        Button(onClick = {
-            navigator.navigate(InnerPageDestination)
-        }) {
-            Text("Next page")
+        else -> {
+            Column {
+                Text(text = "Сессия открыта")
+                Button(onClick = { model.closeSession() }) {
+                    Text("Close")
+                }
+
+            }
         }
 
     }
+//    Timber.d("NAVIGATOR SESSION is %s", navigator)
+//    SmsRetrieverUserConsentBroadcast(onCodeReceived = { s ->
+//        Timber.d("Code = %s", s)
+//    })
+//    Column {
+//        Text(text = "Сессия закрыта")
+//        Button(onClick = { model.openSession() }) {
+//            Text("Open")
+//        }
+//        Button(onClick = { model.signOut() }) {
+//            Text("Sign Out")
+//        }
+//    }
 }
+
+//@Destination
+//@Composable
+//fun CloseSessionPage(
+//    model: MainVM = hiltViewModel(),
+//    navigator: DestinationsNavigator,
+//
+//    ) {
+//    Timber.d("NAVIGATOR SESSION is %s", navigator)
+//    Column {
+//        Text(text = "Сессия открыта")
+//        Button(onClick = { model.closeSession() }) {
+//            Text("Close")
+//        }
+//    }
+//}
+
+//@Destination
+//@Composable
+//fun HomeScreen(
+//    model: MainVM = hiltViewModel(),
+//    navigator: DestinationsNavigator
+//) {
+//    Timber.d("NAVIGATOR HOME is %s", navigator)
+//    Column {
+//        Text(text = "Home")
+//        Button(onClick = { model.closeSession() }) {
+//            Text("Close")
+//        }
+//        Button(onClick = {
+//            navigator.navigate(InnerPageDestination)
+//        }) {
+//            Text("Next page")
+//        }
+//
+//    }
+//}
 
 @Destination
 @Composable
